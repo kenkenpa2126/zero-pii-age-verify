@@ -17,10 +17,14 @@ interface StoredCredential {
   ts: number;
 }
 
-async function jsonPost(url: string, body: unknown): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
+async function jsonPost(
+  url: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   return { ok: res.ok, status: res.status, json: await res.json() };
@@ -43,6 +47,14 @@ async function ensureHolderKey(): Promise<HolderKey> {
 
 function userName(): string {
   return ($("username") as HTMLInputElement).value.trim() || "yamada";
+}
+
+function adminBearerHeader(): Record<string, string> | undefined {
+  const stored = localStorage.getItem("zpi-admin-token") ?? "";
+  const token = prompt("管理者デモ用トークンを入力してください", stored || "dev-admin-token");
+  if (!token) return undefined;
+  localStorage.setItem("zpi-admin-token", token);
+  return { Authorization: `Bearer ${token}` };
 }
 
 // --- passkey ---------------------------------------------------------------
@@ -126,13 +138,15 @@ async function renderCreds(): Promise<void> {
     card.appendChild(chips);
     const note = document.createElement("p");
     note.className = "muted";
-    note.textContent = "ECサイトに送られるのは「over20」だけ。名前・住所・生年月日は送信されません。";
+    note.textContent = "ECサイトに送られるのは「over20」だけ。氏名・住所・生年月日はissuerへの発行リクエストでは使いますが、verifierには送りません。";
     card.appendChild(note);
     const btn = document.createElement("button");
     btn.className = "danger";
     btn.textContent = "失効させる（管理者デモ）";
     btn.addEventListener("click", async () => {
-      const v = await jsonPost("/api/admin/revoke", { vcId: cred.vcId });
+      const headers = adminBearerHeader();
+      if (!headers) return;
+      const v = await jsonPost("/api/admin/revoke", { vcId: cred.vcId }, headers);
       if (v.ok) {
         await idbSet("credentials", creds.filter((c) => c.vcId !== cred.vcId));
         setStatus(`${cred.vcId} を失効させました。ミニ酒屋で年齢確認すると拒否されます。`);

@@ -173,7 +173,13 @@ class Store {
 
   // --- credentials / ledger / status ----------------------------------------
   nextVcId(): string {
-    return `vc-${String(this.nextVcSeq).padStart(4, "0")}`;
+    let vcId: string;
+    do {
+      vcId = `vc-${String(this.nextVcSeq).padStart(4, "0")}`;
+      this.nextVcSeq++;
+    } while (this.issued.has(vcId));
+    this.persist();
+    return vcId;
   }
 
   async recordIssuance(vcId: string, statusIdx: number): Promise<void> {

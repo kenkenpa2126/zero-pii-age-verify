@@ -97,7 +97,7 @@ $("btn-buy").addEventListener("click", async () => {
       out.className = "result ok";
       out.innerHTML = `✅ 年齢確認OK（over20）— 購入できます。<br>
         <span class="muted">サーバーが受け取った主張: <code>${JSON.stringify(j.claims)}</code><br>
-        名前・住所・生年月日はネットワーク上に一度も流れていません（開発者ツールのNetworkタブでも確認できます）。</span>`;
+        verifierには名前・住所・生年月日は送られていません（発行時にはissuerへ送信されます）。</span>`;
     } else {
       out.className = "result bad";
       out.textContent = `❌ 年齢確認失敗: ${j.error}`;

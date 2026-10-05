@@ -18,6 +18,7 @@ const server = serve({ fetch: app.fetch, port: 0 });
 const port = (server.address() as AddressInfo).port;
 const B = `http://localhost:${port}`;
 const AUD = "mini-sake-shop";
+const ADMIN_TOKEN = "dev-admin-token";
 
 let pass = 0;
 let fail = 0;
@@ -32,10 +33,14 @@ function bad(name: string, msg: unknown): void {
   console.log(`  FAIL ${name}: ${msg instanceof Error ? msg.message : msg}`);
 }
 
-async function post(path: string, body: unknown): Promise<{ status: number; json: Record<string, unknown> }> {
+async function post(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; json: Record<string, unknown> }> {
   const res = await fetch(`${B}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
@@ -64,7 +69,17 @@ try {
   process.exit(1);
 }
 
-// 3. verify (only over20 travels)
+// 3. credential identifiers are unique
+try {
+  const { status, json } = await post("/api/dev/issue", { holderPubJwk: holder.publicKeyJwk, license });
+  if (status !== 200 || !json.vcId) throw new Error(JSON.stringify(json));
+  if (String(json.vcId) === cred!.vcId) throw new Error(`duplicate vcId: ${cred!.vcId}`);
+  ok(`second credential has a distinct vcId (${String(json.vcId)})`);
+} catch (e) {
+  bad("unique credential ids", e);
+}
+
+// 4. verify (only over20 travels)
 try {
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -86,7 +101,7 @@ try {
   bad("verify", e);
 }
 
-// 4. nonce is one-time
+// 5. nonce is one-time
 try {
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -105,7 +120,7 @@ try {
   bad("nonce one-time", e);
 }
 
-// 5. legacy compare
+// 6. legacy compare
 try {
   const { status, json } = await post("/api/shop/verify/legacy", {
     ...license,
@@ -117,9 +132,22 @@ try {
   bad("legacy compare", e);
 }
 
-// 6. revoke then verify -> rejected
+// 7. unauthorized revocation is rejected
 try {
-  const { status: rStatus } = await post("/api/admin/revoke", { vcId: cred!.vcId });
+  const { status, json } = await post("/api/admin/revoke", { vcId: cred!.vcId });
+  if (status !== 401 || json.error !== "admin token required") throw new Error(JSON.stringify({ status, json }));
+  ok("revocation endpoint requires an admin token");
+} catch (e) {
+  bad("unauthorized revocation", e);
+}
+
+// 8. revoke then verify -> rejected
+try {
+  const { status: rStatus } = await post(
+    "/api/admin/revoke",
+    { vcId: cred!.vcId },
+    { Authorization: `Bearer ${ADMIN_TOKEN}` },
+  );
   if (rStatus !== 200) throw new Error(`revoke failed: ${rStatus}`);
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -136,7 +164,7 @@ try {
   bad("revocation", e);
 }
 
-// 7. log shows the contrast
+// 9. log shows the contrast
 try {
   const { entries } = (await (await fetch(`${B}/api/shop/log`)).json()) as {
     entries: { kind: string; received: Record<string, unknown> }[];
@@ -151,7 +179,7 @@ try {
   bad("log contrast", e);
 }
 
-// 8. ledger chain integrity (prevHash linkage)
+// 10. ledger chain integrity (prevHash linkage)
 try {
   const { chain } = (await (await fetch(`${B}/api/ledger`)).json()) as {
     chain: { seq: number; prevHash: string; hash: string }[];

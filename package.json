@@ -1,7 +1,7 @@
 {
   "name": "zero-pii-age-verify",
   "version": "0.1.0",
-  "description": "Zero-PII attribute verification: prove 'over 20' without revealing any personal data",
+  "description": "Verifier-side PII minimization demo for proving an age threshold",
   "type": "module",
   "scripts": {
     "dev": "ZEROPII_DEV=1 tsx watch src/server/main.ts",
@@ -11,7 +11,7 @@
     "smoke": "tsx src/smoke.ts",
     "e2e": "tsx src/e2e.ts"
   },
-  "keywords": ["sd-jwt", "webauthn", "passkey", "zero-knowledge", "age-verification"],
+  "keywords": ["sd-jwt", "webauthn", "passkey", "age-verification", "data-minimization"],
   "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^2.1.3",

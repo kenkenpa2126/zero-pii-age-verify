@@ -12,15 +12,17 @@ import { store } from "./store.ts";
 
 export const app = new Hono();
 const enc = new TextEncoder();
+const dec = new TextDecoder();
 
 type RegResp = Parameters<typeof verifyRegistrationResponse>[0]["response"];
 type AuthResp = Parameters<typeof verifyAuthenticationResponse>[0]["response"];
 
 const SHOP_AUD = "mini-sake-shop";
+const DEV_ADMIN_TOKEN = "dev-admin-token";
 
 function clientDataChallenge(resp: { clientDataJSON: string }): string {
   try {
-    const data = JSON.parse(new TextDecoder().decode(b64uDecode(resp.clientDataJSON))) as { challenge?: string };
+    const data = JSON.parse(dec.decode(b64uDecode(resp.clientDataJSON))) as { challenge?: string };
     return data.challenge ?? "";
   } catch {
     return "";
@@ -33,6 +35,19 @@ function siteOrigin(c: { req: { url: string } }): string {
 
 function rpId(c: { req: { url: string } }): string {
   return new URL(c.req.url).hostname;
+}
+
+function adminToken(): string | undefined {
+  return process.env.ZEROPII_ADMIN_TOKEN || (process.env.ZEROPII_DEV ? DEV_ADMIN_TOKEN : undefined);
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  let diff = ab.length ^ bb.length;
+  const len = Math.max(ab.length, bb.length);
+  for (let i = 0; i < len; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
+  return diff === 0;
 }
 
 function isOver20(birthdate: string): boolean {
@@ -278,6 +293,13 @@ app.get("/api/status-list", (c) => {
 });
 
 app.post("/api/admin/revoke", async (c) => {
+  const expectedToken = adminToken();
+  if (!expectedToken) return c.json({ error: "admin revocation is not configured" }, 403);
+  const auth = c.req.header("authorization") ?? "";
+  const suppliedToken = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  if (!suppliedToken || !constantTimeEqual(suppliedToken, expectedToken)) {
+    return c.json({ error: "admin token required" }, 401);
+  }
   const { vcId } = await c.req.json<{ vcId?: string }>();
   if (!vcId) return c.json({ error: "vcId is required" }, 400);
   const ok = store.revoke(vcId);
