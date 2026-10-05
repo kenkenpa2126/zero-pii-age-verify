@@ -8,6 +8,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { b64uDecode, b64uEncode, issueCredential, verifyPresentation } from "../lib/sdjwt.ts";
+import { isOverAgeThreshold } from "./age.ts";
 import { store } from "./store.ts";
 
 export const app = new Hono();
@@ -50,29 +51,16 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function isOver20(birthdate: string): boolean {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthdate);
-  if (!m) return false;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
-  const now = new Date();
-  const cutoff = new Date(now.getFullYear() - 20, now.getMonth(), now.getDate());
-  return new Date(y, mo - 1, d) <= cutoff;
-}
-
 interface IssueBody {
   holderPubJwk?: JsonWebKey;
-  license?: { name?: string; birthdate?: string; address?: string };
+  license?: { birthdate?: string };
 }
 
 async function issueFor(holderPubJwk: JsonWebKey, license: IssueBody["license"]) {
-  const name = license?.name?.trim();
   const birthdate = license?.birthdate?.trim();
-  const address = license?.address?.trim();
-  if (!name || !birthdate || !address) throw new Error("license fields (name/birthdate/address) are required");
+  if (!birthdate) throw new Error("birthdate is required");
   if (!holderPubJwk?.kty) throw new Error("holderPubJwk is required");
+  const over20 = isOverAgeThreshold(birthdate);
 
   const vcId = store.nextVcId();
   const statusIdx = store.nextStatusIdx++;
@@ -83,16 +71,11 @@ async function issueFor(holderPubJwk: JsonWebKey, license: IssueBody["license"])
     vcId,
     ttlSec: 3600,
     statusIdx,
-    claims: {
-      over20: isOver20(birthdate),
-      name,
-      birthdate,
-      address,
-    },
+    claims: { over20 },
   });
   await store.recordIssuance(vcId, statusIdx);
   console.log(`[issue] ${vcId} -> statusIdx=${statusIdx} over20=${issued.disclosures[0]?.value}`);
-  return { vcId, token: issued.token, disclosures: issued.disclosures };
+  return { ok: true, vcId, token: issued.token, disclosures: issued.disclosures };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,8 +266,8 @@ app.get("/api/shop/log", (c) => {
 app.get("/api/ledger", (c) => {
   return c.json({
     issuer: store.issuerName,
-    note: "主張（名前・住所など）は台帳に含まれません。証明書番号と失効状態のみ。",
-    chain: store.ledger,
+    note: "公開ビューは相関リスクを下げるため、credential IDや発行時刻を公開しません。",
+    issuedCount: store.ledger.length,
   });
 });
 

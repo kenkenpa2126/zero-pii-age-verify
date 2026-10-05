@@ -24,11 +24,9 @@
       <h2>2. eKYC → 証明書発行 <span class="tag">デモではモック</span></h2>
       <p class="muted">
         本来ここで運転免許・マイナンバーの実検証が入ります。デモでは入力値を「確認済み」として扱います。
-        この発行リクエストではissuerに氏名・住所・生年月日を送りますが、発行元の台帳に残るのは<b>証明書番号と失効状態のみ</b>です。
+        このPoCではissuerに生年月日だけを送り、issuerは<b>over20</b>を計算したら正確な生年月日をcredentialにもwalletにも保存しません。
       </p>
-      <label>氏名 <input id="lic-name" value="山田 太郎" /></label>
       <label>生年月日 <input id="lic-birth" value="1995-04-01" /></label>
-      <label>住所 <input id="lic-addr" value="東京都千代田区1-2-3" /></label>
       <button id="btn-issue">証明書を発行</button>
     </section>
 
@@ -39,7 +37,7 @@
 
     <nav>
       <a href="/shop.html">→ ミニ酒屋で試す</a> ・
-      <a href="/api/ledger" target="_blank">透明性ログを見る</a> ・
+      <a href="/api/ledger" target="_blank">発行ログの要約を見る</a> ・
       <a href="/api/status-list" target="_blank">失効リストを見る</a>
     </nav>
   </main>

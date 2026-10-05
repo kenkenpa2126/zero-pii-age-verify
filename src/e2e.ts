@@ -47,7 +47,8 @@ async function post(
 }
 
 const holder = await generateSigningKeypair();
-const license = { name: "山田 太郎", birthdate: "1990-01-01", address: "東京都千代田区1-2-3" };
+const license = { birthdate: "1990-01-01" };
+const legacyPii = { name: "山田 太郎", birthdate: "1995-04-01", address: "東京都千代田区1-2-3" };
 
 console.log("== e2e ==");
 
@@ -69,7 +70,36 @@ try {
   process.exit(1);
 }
 
-// 3. credential identifiers are unique
+// 3. issued credential stores only the age predicate
+try {
+  const claims = cred!.disclosures.map((d) => d.claim);
+  if (claims.length !== 1 || claims[0] !== "over20") throw new Error(`unexpected claims: ${claims.join(",")}`);
+  const serialized = JSON.stringify(cred);
+  for (const pii of [legacyPii.name, legacyPii.address, license.birthdate]) {
+    if (serialized.includes(pii)) throw new Error(`credential serialized raw PII: ${pii}`);
+  }
+  ok("issued credential contains only the age predicate");
+} catch (e) {
+  bad("credential minimization", e);
+}
+
+// 4. invalid DOBs are rejected
+for (const [birthdate, reason] of [
+  ["2021-02-29", "invalid leap day"],
+  ["2021-13-01", "invalid month"],
+  ["2020-02-31", "invalid day"],
+  ["not-a-date", "malformed date"],
+] as const) {
+  try {
+    const { status } = await post("/api/dev/issue", { holderPubJwk: holder.publicKeyJwk, license: { birthdate } });
+    if (status !== 400) throw new Error(`${reason} should be rejected`);
+    ok(`DOB validation rejects ${reason}`);
+  } catch (e) {
+    bad(`DOB validation: ${reason}`, e);
+  }
+}
+
+// 5. credential identifiers are unique
 try {
   const { status, json } = await post("/api/dev/issue", { holderPubJwk: holder.publicKeyJwk, license });
   if (status !== 200 || !json.vcId) throw new Error(JSON.stringify(json));
@@ -79,7 +109,7 @@ try {
   bad("unique credential ids", e);
 }
 
-// 4. verify (only over20 travels)
+// 6. verify (only over20 travels)
 try {
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -89,6 +119,9 @@ try {
     nonce: nonceJson,
     aud: AUD,
   });
+  for (const pii of [legacyPii.name, legacyPii.address, license.birthdate]) {
+    if (presentation.includes(pii)) throw new Error(`presentation serialized raw PII: ${pii}`);
+  }
   const { status, json } = await post("/api/shop/verify", { presentation, nonce: nonceJson });
   if (status !== 200 || !json.ok) throw new Error(JSON.stringify(json));
   const claims = json.claims as Record<string, unknown>;
@@ -101,7 +134,7 @@ try {
   bad("verify", e);
 }
 
-// 5. nonce is one-time
+// 7. nonce is one-time
 try {
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -120,10 +153,10 @@ try {
   bad("nonce one-time", e);
 }
 
-// 6. legacy compare
+// 8. legacy compare
 try {
   const { status, json } = await post("/api/shop/verify/legacy", {
-    ...license,
+    ...legacyPii,
     phone: "090-XXXX-XXXX",
   });
   if (status !== 200 || json.receivedPii !== true) throw new Error(JSON.stringify(json));
@@ -132,7 +165,7 @@ try {
   bad("legacy compare", e);
 }
 
-// 7. unauthorized revocation is rejected
+// 9. unauthorized revocation is rejected
 try {
   const { status, json } = await post("/api/admin/revoke", { vcId: cred!.vcId });
   if (status !== 401 || json.error !== "admin token required") throw new Error(JSON.stringify({ status, json }));
@@ -141,7 +174,7 @@ try {
   bad("unauthorized revocation", e);
 }
 
-// 8. revoke then verify -> rejected
+// 10. revoke then verify -> rejected
 try {
   const { status: rStatus } = await post(
     "/api/admin/revoke",
@@ -164,7 +197,7 @@ try {
   bad("revocation", e);
 }
 
-// 9. log shows the contrast
+// 11. log shows the contrast
 try {
   const { entries } = (await (await fetch(`${B}/api/shop/log`)).json()) as {
     entries: { kind: string; received: Record<string, unknown> }[];
@@ -179,19 +212,18 @@ try {
   bad("log contrast", e);
 }
 
-// 10. ledger chain integrity (prevHash linkage)
+// 12. public issuance log is minimized
 try {
-  const { chain } = (await (await fetch(`${B}/api/ledger`)).json()) as {
-    chain: { seq: number; prevHash: string; hash: string }[];
-  };
-  let prev = "0".repeat(64);
-  for (const rec of chain) {
-    if (rec.prevHash !== prev) throw new Error(`chain broken at seq ${rec.seq}`);
-    prev = rec.hash;
+  const ledger = (await (await fetch(`${B}/api/ledger`)).json()) as Record<string, unknown>;
+  if (!Number.isInteger(ledger.issuedCount)) throw new Error("issuedCount missing");
+  if ("chain" in ledger) throw new Error("public ledger should not expose the issuance chain");
+  const serialized = JSON.stringify(ledger);
+  if (serialized.includes(cred!.vcId) || serialized.includes(license.birthdate)) {
+    throw new Error(`ledger exposes correlating data: ${serialized}`);
   }
-  ok(`ledger chain intact (${chain.length} records, no claims stored)`);
+  ok("public issuance log exposes only an aggregate summary");
 } catch (e) {
-  bad("ledger", e);
+  bad("public ledger minimization", e);
 }
 
 server.close();

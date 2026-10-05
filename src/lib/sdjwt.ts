@@ -15,6 +15,9 @@
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const SUPPORTED_JWT_ALG = "ES256";
+const SD_JWT_TYP = "SD-JWT";
+const KB_JWT_TYP = "kb+jwt";
 
 // ---------------------------------------------------------------------------
 // base64url helpers
@@ -54,6 +57,11 @@ async function sha256B64(input: string): Promise<string> {
 
 function decodeJson<T>(part: string): T {
   return JSON.parse(dec.decode(b64uDecode(part))) as T;
+}
+
+function validateJoseHeader(header: { alg?: unknown; typ?: unknown }, expectedTyp: string): void {
+  if (header.alg !== SUPPORTED_JWT_ALG) throw new Error(`unsupported JWT alg: ${String(header.alg)}`);
+  if (header.typ !== expectedTyp) throw new Error(`unexpected JWT typ: ${String(header.typ)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +131,7 @@ export async function issueCredential(opts: {
     sdHashes.push(await sha256B64(`${salt}~${JSON.stringify(claim)}~${JSON.stringify(value)}`));
   }
 
-  const header = { alg: "ES256", typ: "SD-JWT" };
+  const header = { alg: SUPPORTED_JWT_ALG, typ: SD_JWT_TYP };
   const payload = {
     iss: opts.issuerName,
     iat: now,
@@ -163,7 +171,7 @@ export async function presentCredential(opts: {
   // sd_hash covers the SD-JWT and disclosures up to (and including) the last "~".
   const sdHashInput = [opts.credential.token, ...encodedDisclosures, ""].join("~");
 
-  const kbHeader = { alg: "ES256", typ: "kb+jwt" };
+  const kbHeader = { alg: SUPPORTED_JWT_ALG, typ: KB_JWT_TYP };
   const kbPayload = {
     nonce: opts.nonce,
     aud: opts.aud,
@@ -202,10 +210,12 @@ export async function verifyPresentation(opts: {
   const encodedDisclosures = parts.slice(1, -1);
 
   // --- 1. issuer signature -------------------------------------------------
-  const [jwtHeader, jwtPayload, jwtSig] = token.split(".");
+  const tokenParts = token.split(".");
+  if (tokenParts.length !== 3) throw new Error("malformed SD-JWT");
+  const [jwtHeader, jwtPayload, jwtSig] = tokenParts;
   if (!jwtHeader || !jwtPayload || !jwtSig) throw new Error("malformed SD-JWT");
-  const header = decodeJson<{ alg: string; typ: string }>(jwtHeader);
-  if (header.alg !== "ES256") throw new Error(`unexpected alg: ${header.alg}`);
+  const header = decodeJson<{ alg?: unknown; typ?: unknown }>(jwtHeader);
+  validateJoseHeader(header, SD_JWT_TYP);
 
   const payload = decodeJson<SdJwtPayload>(jwtPayload);
   const issuerKey = await crypto.subtle.importKey(
@@ -242,8 +252,12 @@ export async function verifyPresentation(opts: {
   }
 
   // --- 3. key binding JWT ---------------------------------------------------
-  const [kbHeaderB64, kbPayloadB64, kbSigB64] = kbJwt.split(".");
+  const kbParts = kbJwt.split(".");
+  if (kbParts.length !== 3) throw new Error("malformed KB-JWT");
+  const [kbHeaderB64, kbPayloadB64, kbSigB64] = kbParts;
   if (!kbHeaderB64 || !kbPayloadB64 || !kbSigB64) throw new Error("malformed KB-JWT");
+  const kbHeader = decodeJson<{ alg?: unknown; typ?: unknown }>(kbHeaderB64);
+  validateJoseHeader(kbHeader, KB_JWT_TYP);
   const kbPayload = decodeJson<{ nonce: string; aud: string; iat: number; sd_hash: string }>(kbPayloadB64);
 
   const maxAge = opts.kbMaxAgeSec ?? 300;

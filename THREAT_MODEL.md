@@ -1,22 +1,27 @@
 # Threat Model
 
-This project is a small PoC for verifier-side PII minimization. It is not a production identity platform.
+This project is a small PoC for age-verification data minimization. It is not a production identity platform.
 
 ## Actors
 
-- Issuer: receives mock identity data during issuance, decides whether the holder is over the age threshold, and signs a credential.
-- Holder / wallet: stores the issued credential, disclosures, and holder signing key locally.
+- Issuer: receives a mock birthdate during issuance, evaluates the age threshold, and signs a credential containing only `over20`.
+- Holder / wallet: stores the issued credential, the `over20` disclosure, and the holder signing key locally.
 - Verifier: asks for an age-threshold proof and verifies the presentation.
 - Attacker: may replay presentations, steal stored data, operate a malicious verifier, compromise service data, or collude with another party.
 
 ## Trust Assumptions
 
-Two issuer assumptions are intentionally separate:
+Two issuer assumptions are intentionally separate.
 
-- The issuer is trusted to attest the age attribute correctly.
-- The issuer is trusted to securely retain any PII it collected during issuance.
+Correctness trust:
 
-The first assumption is necessary for the verifier to trust `over20`. The second assumption is a separate privacy and operational risk. This PoC reduces what the verifier receives; it does not remove issuer-side PII handling.
+- The issuer is trusted to evaluate and attest the age attribute correctly.
+
+Confidentiality trust:
+
+- The issuer should not be assumed to be immune to data breaches.
+
+The design minimizes dependence on issuer confidentiality by avoiding unnecessary retention. The issuer sees the mock birthdate during issuance, but the issued credential, wallet storage, verifier logs, and public issuance summary do not contain the exact birthdate.
 
 ## Scenario: Verifier Database Breach
 
@@ -40,33 +45,34 @@ Remaining assumptions:
 
 Protected:
 
-- A verifier asking only for `over20` cannot learn hidden claims from the credential because it receives only selected disclosures.
+- A verifier asking for the demo presentation learns only `over20`.
+- The credential does not contain hidden name, address, or birthdate disclosures for the verifier to request later.
 - Tampered disclosures fail hash verification.
 
 May leak:
 
 - A malicious verifier can retain `vcId`, holder public key, and presentation metadata.
-- A malicious verifier can ask the user to reveal more claims; the wallet UX must make that explicit.
 
 Remaining assumptions:
 
-- The holder must understand and approve the requested disclosures.
-- This PoC does not implement a policy engine that restricts what a verifier may request.
+- The holder must still know which verifier they are presenting to.
+- This PoC does not implement verifier reputation or policy controls.
 
 ## Scenario: Issuer Database Breach
 
 Protected:
 
-- The verifier-side minimization still helps verifier breaches, but it does not protect PII held by the issuer.
+- The issued credential and wallet copy do not contain raw PII.
+- The public issuance summary does not expose credential IDs or issuance timestamps.
 
 May leak:
 
-- Any PII retained by the issuer during issuance.
-- Issuance records such as credential IDs and status indices.
+- Any raw birthdate data the issuer logs or retains outside this PoC.
+- Internal issuance records such as credential IDs and status indices if the local state file is breached.
 
 Remaining assumptions:
 
-- A real issuer should minimize retention, encrypt sensitive records, and have operational controls. This PoC does not implement those controls.
+- A real issuer should avoid retaining raw PII, encrypt sensitive records, and have operational controls. This PoC demonstrates the minimization direction but does not implement production issuer operations.
 
 ## Scenario: Issuer Signing Key Compromise
 
@@ -88,11 +94,13 @@ Remaining assumptions:
 Protected:
 
 - Presentations require a holder key binding JWT signed by the holder private key.
-- Copying only the SD-JWT and disclosures is not enough to create a valid presentation.
+- Copying only the SD-JWT and disclosure is not enough to create a valid presentation.
+- The stolen credential has lower PII value because it contains only the age predicate and protocol metadata.
 
 May leak or fail:
 
 - If the holder private key is also stolen, an attacker can present the credential.
+- A stolen wallet may still expose stable identifiers such as `vcId` and holder public key.
 - This PoC does not prove that the person holding the device is the original subject at presentation time.
 
 Remaining assumptions:
@@ -119,7 +127,7 @@ Remaining assumptions:
 
 Protected:
 
-- Hidden PII claims are still not disclosed if each verifier receives only `over20`.
+- Raw PII is still not disclosed if each verifier receives only `over20`.
 
 May leak:
 
@@ -134,7 +142,7 @@ Remaining assumptions:
 
 Protected:
 
-- The cryptographic selective-disclosure mechanism still hides undisclosed claims from a verifier acting alone.
+- The verifier does not receive raw PII from the presentation alone.
 
 May leak:
 
@@ -143,3 +151,7 @@ May leak:
 Remaining assumptions:
 
 - Privacy against issuer-verifier collusion is out of scope for this PoC.
+
+## Important Boundary
+
+Data minimization is not the same as anonymity or unlinkability. This version intentionally focuses on reducing raw PII in the credential, wallet, verifier, and public metadata. It does not try to solve cross-site correlation.

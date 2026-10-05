@@ -6,9 +6,9 @@
 
 ## 想定タイトル案
 
-- 年齢確認で生年月日を渡さないPoCを作った
-- 「20歳以上か」だけを確認するために、氏名や住所まで預かる必要はあるのか
-- 守り切れないなら持たない: verifier側PII最小化の小さな実験
+- 年齢確認で生年月日を保存しないPoCを作った
+- 「20歳以上か」だけを確認するために、正確な生年月日まで持つ必要はあるのか
+- 守り切れないなら持たない: 年齢確認データ最小化の小さな実験
 
 ## 記事構成
 
@@ -26,26 +26,29 @@
 
 ### 3. 生年月日ではなく「20歳以上か」だけでいいのでは
 
-- issuerが本人確認し、`over20: true`のような属性に署名する。
-- holderはcredentialをローカルに保持する。
-- verifierには必要な属性だけを選択開示する。
+- issuerは発行時に生年月日を確認し、`over20: true`のような属性だけに変換する。
+- credentialには正確な生年月日を入れない。
+- holderのwalletにも不要なPIIを置かない。
+- verifierには必要な属性だけを提示する。
 
 ### 4. PoCを作ってみた
 
 - 小さな実験プロジェクトとしてAIを使いながら実装した。
 - 目的は本番基盤ではなく、データ最小化の発想を動くコードで確認すること。
 - SD-JWT風の選択開示、holder key binding、nonce、audience、失効を入れた。
+- ただしcredentialのclaimは`over20`だけに絞った。
 
 ### 5. verifierに実際に送られるデータ
 
 - shop verifierへ送るのは`over20`のdisclosureとpresentation。
 - verifierのログには`over20: true`だけが残る。
 - 従来方式の比較では、氏名、住所、生年月日、電話番号がそのままログに残る。
-- ただしissuerには発行時にPIIを送っている。ここを混同しない。
+- issuerは発行時に生年月日を見るが、判定後はcredentialにもwalletにも入れない。
 
 ### 6. 防げること
 
 - verifierのDBやログが漏洩した場合のPII被害を減らせる。
+- walletが盗まれた場合でも、氏名・住所・正確な生年月日をcredentialから抜かれない。
 - verifierが正確な生年月日や住所を保存しなくてよくなる。
 - presentationの単純なリプレイはnonceで防げる。
 - credential単体のコピー利用はholder key bindingで難しくなる。
@@ -63,14 +66,14 @@
 
 - 技術だけでは決まらない。
 - 行政、通信キャリア、銀行、認定事業者など候補はある。
-- issuerがPIIを扱う以上、issuer側のデータ保持方針と監査が重要。
-- 「issuerは属性を正しく証明する」と「issuerがPIIを安全に保持する」は別の信頼。
+- 「issuerは年齢属性を正しく証明する」と「issuerが個人情報を絶対漏らさない」は別の信頼。
+- 後者に依存しすぎないために、issuer側も保持データを減らすべき。
 
 ### 9. 「守る」より「持たない」
 
 - セキュリティは守る技術だけではない。
 - 収集するデータを減らすこと自体が強い設計判断。
-- verifierが必要以上の個人情報を持たないだけで、漏洩時の被害範囲は変わる。
+- verifierやwalletが必要以上の個人情報を持たないだけで、漏洩時の被害範囲は変わる。
 
 ## 注意して書くこと
 
@@ -78,15 +81,16 @@
 - 完全匿名ではない。
 - verifier間でリンク不能ではない。
 - 本番投入できる認証基盤ではない。
-- issuerは発行時にPIIを見る。
+- issuerは発行時に生年月日を見る。
+- データ最小化と匿名性を混同しない。
 - 「PIIが一切ネットワークを流れない」とは書かない。
 
 ## 入れたい図
 
 ```mermaid
 flowchart LR
-  User[Holder / Wallet] -->|PII during issuance| Issuer[Issuer]
-  Issuer -->|signed credential| User
+  User[Holder / Wallet] -->|birthdate during issuance| Issuer[Issuer]
+  Issuer -->|over20 credential| User
   User -->|over20 only| Verifier[Verifier]
   Verifier -->|no DOB/name/address stored| Log[Verifier log]
 ```

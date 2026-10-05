@@ -96,9 +96,7 @@ $("btn-login").addEventListener("click", async () => {
 $("btn-issue").addEventListener("click", async () => {
   const key = await ensureHolderKey();
   const license = {
-    name: ($("lic-name") as HTMLInputElement).value,
     birthdate: ($("lic-birth") as HTMLInputElement).value,
-    address: ($("lic-addr") as HTMLInputElement).value,
   };
   const v = await jsonPost("/api/issue", { holderPubJwk: key.publicKeyJwk, license });
   if (!v.ok || !v.json.ok) {
@@ -138,7 +136,7 @@ async function renderCreds(): Promise<void> {
     card.appendChild(chips);
     const note = document.createElement("p");
     note.className = "muted";
-    note.textContent = "ECサイトに送られるのは「over20」だけ。氏名・住所・生年月日はissuerへの発行リクエストでは使いますが、verifierには送りません。";
+    note.textContent = "この端末に保存されるcredentialのclaimは「over20」だけ。正確な生年月日はissuerが判定後に破棄し、walletにもverifierにも入りません。";
     card.appendChild(note);
     const btn = document.createElement("button");
     btn.className = "danger";
