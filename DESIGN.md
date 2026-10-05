@@ -110,7 +110,15 @@ A presentation created for another audience is rejected.
 11. `sd_hash`, binding the KB-JWT to the exact SD-JWT and disclosed claims.
 12. Holder key signature.
 
-`/api/shop/verify` then checks revocation by `vcId`.
+`/api/shop/verify` then checks revocation using the credential `status.idx` and the issuer-published status list.
+
+Cryptographic validity does not imply authorization. After the presentation is cryptographically valid, the shop applies its own application policy:
+
+```ts
+claims.over20 === true
+```
+
+A valid presentation with `over20: false` is rejected with HTTP 403 as an authorization failure, not as a malformed credential.
 
 ## Revocation
 
@@ -122,7 +130,7 @@ The issuer records each issued credential with:
 
 `/api/admin/revoke` marks a credential revoked and sets a status bit. The endpoint requires a bearer admin token. In dev mode the demo token is `dev-admin-token`; outside dev, set `ZEROPII_ADMIN_TOKEN`.
 
-The verifier rejects a credential if `store.isRevoked(result.vcId)` is true.
+The verifier does not read issuer-private issued-record state during shop verification. It reads the issuer-published status bitset exposed by `/api/status-list` and checks the signed `status.idx` from the credential. Missing or out-of-range status references are rejected safely.
 
 ## Removed Transparency Ledger
 
@@ -135,7 +143,7 @@ Reason:
 - publishing or preserving issuance-chain metadata makes the protocol harder to explain
 - stable credential identifiers and issuance timestamps can become correlation material
 
-The remaining status mechanism is intentionally small: a local issued-record map plus a bitset exposed by `/api/status-list`.
+The remaining status mechanism is intentionally small: an issuer-internal issued-record map for admin revocation plus a bitset exposed by `/api/status-list` for verifier revocation checks.
 
 ## What the Verifier Sees
 
@@ -146,7 +154,7 @@ During successful verification, the verifier sees:
 | `over20` | age attribute | The only business claim intentionally disclosed. |
 | `iss` | required security metadata | Identifies which issuer key should be trusted. |
 | `iat`, `exp` | required security metadata / potentially linkable metadata | Needed for freshness and expiration checks; also timestamps. |
-| `jti` / `vcId` | stable identifier / potentially linkable metadata | Needed here for revocation lookup; reusable across presentations. |
+| `jti` / `vcId` | stable identifier / potentially linkable metadata | Credential identifier; reusable across presentations. |
 | `status.idx` | required security metadata / potentially linkable metadata | Used for revocation status. |
 | `cnf.jwk` | required security metadata / stable identifier | Enforces holder key binding; linkable if reused. |
 | `_sd`, `_sd_alg` | required security metadata | Binds disclosures to the issuer-signed credential. |
@@ -191,7 +199,7 @@ Data minimization is not the same as anonymity or unlinkability.
 - Nonce / replay protection: implemented by verifier nonce storage.
 - Audience binding: implemented in the KB-JWT.
 - Expiration: implemented with `exp` on the credential and max age on the KB-JWT.
-- Revocation: implemented with a local status list and verifier check.
+- Revocation: implemented with issuer-published status bits and verifier-side `status.idx` checks.
 - Raw PII minimization: issuer input is reduced to birthdate, and only `over20` is issued.
 
 ## Known PoC Simplifications

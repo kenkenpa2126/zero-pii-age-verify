@@ -51,6 +51,13 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function statusBit(bits: Uint8Array, statusIdx: number): boolean {
+  if (!Number.isInteger(statusIdx) || statusIdx < 0 || statusIdx >= bits.length * 8) {
+    throw new Error("status index out of range");
+  }
+  return (bits[statusIdx >> 3]! & (1 << (statusIdx & 7))) !== 0;
+}
+
 interface IssueBody {
   holderPubJwk?: JsonWebKey;
   license?: { birthdate?: string };
@@ -237,8 +244,12 @@ app.post("/api/shop/verify", async (c) => {
       expectedAud: SHOP_AUD,
       kbMaxAgeSec: 120,
     });
-    if (store.isRevoked(result.vcId)) {
+    const publishedStatus = store.statusListSnapshot();
+    if (statusBit(publishedStatus, result.statusIdx)) {
       return c.json({ ok: false, error: "credential revoked", vcId: result.vcId }, 403);
+    }
+    if (result.claims.over20 !== true) {
+      return c.json({ ok: false, error: "age policy not satisfied", claims: result.claims }, 403);
     }
     // The verifier only ever receives the revealed claims. Log proves it.
     store.pushLog({ ts: Date.now(), kind: "zpi", aud: SHOP_AUD, received: result.claims });
@@ -264,7 +275,7 @@ app.get("/api/shop/log", (c) => {
 // ---------------------------------------------------------------------------
 
 app.get("/api/status-list", (c) => {
-  return c.json({ bits: b64uEncode(store.statusBits) });
+  return c.json({ bits: b64uEncode(store.statusListSnapshot()) });
 });
 
 app.post("/api/admin/revoke", async (c) => {

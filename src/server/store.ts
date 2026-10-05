@@ -180,8 +180,8 @@ class Store {
     return true;
   }
 
-  isRevoked(vcId: string): boolean {
-    return this.issued.get(vcId)?.revoked ?? true;
+  statusListSnapshot(): Uint8Array {
+    return new Uint8Array(this.statusBits);
   }
 
   pushLog(entry: LogEntry): void {

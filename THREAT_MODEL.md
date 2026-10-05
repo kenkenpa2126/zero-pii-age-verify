@@ -31,6 +31,7 @@ Protected:
 
 - The verifier should not have stored name, address, birthdate, or identity document data from the selective-disclosure flow.
 - A breach of the verifier log should reveal only the claims the holder disclosed, such as `over20`.
+- A cryptographically valid `over20: false` presentation does not authorize age-restricted access.
 
 May leak:
 
@@ -50,6 +51,7 @@ Protected:
 - A verifier asking for the demo presentation learns only `over20`.
 - The credential does not contain hidden name, address, or birthdate disclosures for the verifier to request later.
 - Tampered disclosures fail hash verification.
+- The shop applies its own authorization policy after cryptographic verification.
 
 May leak:
 
@@ -66,6 +68,7 @@ Protected:
 
 - The issued credential and wallet copy do not contain raw PII.
 - There is no public issuance ledger exposing credential IDs or issuance timestamps.
+- Verifiers use the issuer-published status list for revocation instead of issuer-private issued-record storage.
 
 May leak:
 

@@ -89,6 +89,7 @@ export interface IssuedCredential {
 
 export interface VerifiedPresentation {
   vcId: string;
+  statusIdx: number;
   /** Only the claims the holder chose to reveal. Nothing else. */
   claims: Record<string, unknown>;
 }
@@ -218,6 +219,9 @@ export async function verifyPresentation(opts: {
   validateJoseHeader(header, SD_JWT_TYP);
 
   const payload = decodeJson<SdJwtPayload>(jwtPayload);
+  if (!Number.isInteger(payload.status?.idx) || payload.status.idx < 0) {
+    throw new Error("invalid status index");
+  }
   const issuerKey = await crypto.subtle.importKey(
     "jwk",
     opts.issuerPubJwk,
@@ -289,7 +293,7 @@ export async function verifyPresentation(opts: {
   // --- 4. return only revealed claims ---------------------------------------
   const claims: Record<string, unknown> = {};
   for (const d of revealed) claims[d.claim] = d.value;
-  return { vcId: payload.jti, claims };
+  return { vcId: payload.jti, statusIdx: payload.status.idx, claims };
 }
 
 // ---------------------------------------------------------------------------

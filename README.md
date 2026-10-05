@@ -88,7 +88,14 @@ shop verifierには、次の値を開示しません。
 4. `/shop.html`で購入ボタンを押す。
 5. walletは`over20`だけを開示し、nonceとaudienceに束縛したpresentationを送る。
 6. shop verifierは署名、holder鍵束縛、nonce、audience、期限、失効状態を検証する。
-7. 従来方式ボタンを押すと、PIIを直接送る場合とのログ差分を確認できる。
+7. shop verifierは検証後にアプリケーションポリシーとして`over20 === true`を要求する。
+8. 従来方式ボタンを押すと、PIIを直接送る場合とのログ差分を確認できる。
+
+## 検証と認可
+
+Cryptographic validity does not imply authorization.
+
+verifierはまずcredential/presentationの暗号学的な妥当性を検証し、その後でshop自身の認可ポリシーを適用します。このデモでは、購入を許可する条件は`claims.over20 === true`です。`over20: false`のpresentationは、署名やnonceが正しくてもHTTP 403で拒否されます。
 
 ## 実装済みの性質
 
@@ -98,7 +105,7 @@ shop verifierには、次の値を開示しません。
 - nonce / replay protection
 - audience binding
 - credential expiration
-- revocation status check
+- revocation status check using the issuer-published status list
 - verifier側のデータ最小化
 
 ## 制限

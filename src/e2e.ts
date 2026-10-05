@@ -9,6 +9,7 @@ import { app } from "./server/index.ts";
 import { store } from "./server/store.ts";
 import {
   generateSigningKeypair,
+  issueCredential,
   presentCredential,
   type IssuedCredential,
 } from "./lib/sdjwt.ts";
@@ -48,6 +49,7 @@ async function post(
 
 const holder = await generateSigningKeypair();
 const license = { birthdate: "1990-01-01" };
+const underageLicense = { birthdate: "2010-01-01" };
 const legacyPii = { name: "山田 太郎", birthdate: "1995-04-01", address: "東京都千代田区1-2-3" };
 
 console.log("== e2e ==");
@@ -134,7 +136,79 @@ try {
   bad("verify", e);
 }
 
-// 7. nonce is one-time
+// 7. cryptographically valid underage presentation is rejected by shop policy
+try {
+  const { status: issueStatus, json: issueJson } = await post("/api/dev/issue", {
+    holderPubJwk: holder.publicKeyJwk,
+    license: underageLicense,
+  });
+  if (issueStatus !== 200 || !issueJson.vcId) throw new Error(JSON.stringify(issueJson));
+  const underageCred: IssuedCredential = {
+    vcId: String(issueJson.vcId),
+    token: String(issueJson.token),
+    disclosures: issueJson.disclosures as IssuedCredential["disclosures"],
+  };
+  const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
+  const presentation = await presentCredential({
+    credential: underageCred,
+    reveal: ["over20"],
+    holder,
+    nonce: nonceJson,
+    aud: AUD,
+  });
+  const { status, json } = await post("/api/shop/verify", { presentation, nonce: nonceJson });
+  if (status !== 403 || json.error !== "age policy not satisfied") throw new Error(JSON.stringify({ status, json }));
+  ok("valid over20=false presentation is rejected by shop authorization policy");
+} catch (e) {
+  bad("age authorization policy", e);
+}
+
+// 8. malformed / invalid presentation is a verification failure
+try {
+  const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
+  const presentation = await presentCredential({
+    credential: cred!,
+    reveal: ["over20"],
+    holder,
+    nonce: nonceJson,
+    aud: AUD,
+  });
+  const parts = presentation.split("~");
+  parts[1] = "not-a-disclosure";
+  const { status, json } = await post("/api/shop/verify", { presentation: parts.join("~"), nonce: nonceJson });
+  if (status !== 400 || typeof json.error !== "string") throw new Error(JSON.stringify({ status, json }));
+  ok("tampered presentation is rejected as a verification failure");
+} catch (e) {
+  bad("tampered presentation rejection", e);
+}
+
+// 9. out-of-range status references are safely rejected
+try {
+  const badStatusCred = await issueCredential({
+    issuer: store.issuer,
+    issuerName: store.issuerName,
+    holderPubJwk: holder.publicKeyJwk,
+    vcId: "vc-out-of-range-status",
+    ttlSec: 3600,
+    statusIdx: 999_999,
+    claims: { over20: true },
+  });
+  const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
+  const presentation = await presentCredential({
+    credential: badStatusCred,
+    reveal: ["over20"],
+    holder,
+    nonce: nonceJson,
+    aud: AUD,
+  });
+  const { status, json } = await post("/api/shop/verify", { presentation, nonce: nonceJson });
+  if (status !== 400 || json.error !== "status index out of range") throw new Error(JSON.stringify({ status, json }));
+  ok("out-of-range status reference is rejected without issuer-private lookup");
+} catch (e) {
+  bad("out-of-range status reference", e);
+}
+
+// 10. nonce is one-time
 try {
   const { nonce: nonceJson } = (await (await fetch(`${B}/api/nonce?aud=${AUD}`)).json()) as { nonce: string };
   const presentation = await presentCredential({
@@ -153,7 +227,7 @@ try {
   bad("nonce one-time", e);
 }
 
-// 8. legacy compare
+// 11. legacy compare
 try {
   const { status, json } = await post("/api/shop/verify/legacy", {
     ...legacyPii,
@@ -165,7 +239,7 @@ try {
   bad("legacy compare", e);
 }
 
-// 9. unauthorized revocation is rejected
+// 12. unauthorized revocation is rejected
 try {
   const { status, json } = await post("/api/admin/revoke", { vcId: cred!.vcId });
   if (status !== 401 || json.error !== "admin token required") throw new Error(JSON.stringify({ status, json }));
@@ -174,7 +248,7 @@ try {
   bad("unauthorized revocation", e);
 }
 
-// 10. revoke then verify -> rejected
+// 13. revoke then verify -> rejected using the status list
 try {
   const { status: rStatus } = await post(
     "/api/admin/revoke",
@@ -192,12 +266,12 @@ try {
   });
   const { status, json } = await post("/api/shop/verify", { presentation, nonce: nonceJson });
   if (status !== 403 || json.error !== "credential revoked") throw new Error(JSON.stringify(json));
-  ok("revoked credential is rejected at verification");
+  ok("revoked credential is rejected through the published status list");
 } catch (e) {
   bad("revocation", e);
 }
 
-// 11. log shows the contrast
+// 14. log shows the contrast
 try {
   const { entries } = (await (await fetch(`${B}/api/shop/log`)).json()) as {
     entries: { kind: string; received: Record<string, unknown> }[];
@@ -212,7 +286,7 @@ try {
   bad("log contrast", e);
 }
 
-// 12. status list remains available without a public issuance ledger
+// 15. status list remains available without a public issuance ledger
 try {
   const ledgerRes = await fetch(`${B}/api/ledger`);
   if (ledgerRes.status !== 404) throw new Error(`ledger endpoint should be removed, got ${ledgerRes.status}`);
