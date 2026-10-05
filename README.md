@@ -54,10 +54,12 @@ issuer署名済みpayloadには、プロトコル上必要なメタデータも�
 
 通常のデモフローでshop verifierが受け取るのは次です。
 
-- `over20`
-- credential ID
-- holder公開鍵を含むissuer署名済みcredential
-- nonce/audience/sd_hashを含むkey binding JWT
+| 分類 | verifierが見るもの |
+| --- | --- |
+| age attribute | `over20` |
+| required security metadata | issuer、issued-at、expiration、status index、salted disclosure hash、nonce、audience、`sd_hash` |
+| stable identifier | credential ID (`jti` / `vcId`) |
+| potentially linkable metadata | holder public key (`cnf.jwk`)、issuer-signed token reuse、credential ID、timestamps |
 
 ## Verifierが学ばないこと
 
@@ -69,6 +71,14 @@ shop verifierには、次の値を開示しません。
 - 本人確認書類
 
 このPoCは、issuerが発行時に生年月日を一時的に見ることを許容します。ただし、issuerは`over20`を計算した後、raw PIIをcredential、wallet、公開ログに残さない設計にしています。
+
+## Roadmap
+
+「Zero Trust」はここではプロジェクトの考え方を表す informal な言葉で、正式なZero Trust Architecture準拠を主張するものではありません。
+
+- v1: Zero-Trust Verifier - Do not give unnecessary PII to services.
+- v2: Zero-Trust Issuer - Reduce reliance on a single issuer / trust anchor.
+- v3: Zero-Trust Holder - Reduce reliance on the user correctly protecting and using the credential.
 
 ## デモの流れ
 
@@ -100,9 +110,12 @@ shop verifierには、次の値を開示しません。
 - verifier間のunlinkability
 - ZKPベースの証明
 - trustlessな年齢確認
+- issuer impersonation / weak identity-proofing attacks
+- issuer compromise
 - issuerとverifierが結託した場合のプライバシー
 - issuer署名鍵が漏洩した場合の完全な保護
 - credentialの貸し借りや端末ごとの実利用者確認
+- wallet/device compromise
 
 特に、この実装では同じcredential IDとholder公開鍵を含むSD-JWTを複数のverifierに提示し得るため、verifier同士が照合すればpresentationをリンクできます。
 

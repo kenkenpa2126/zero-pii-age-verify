@@ -7,17 +7,7 @@ const STATE_FILE = "data/state.json";
 export interface IssuedRecord {
   vcId: string;
   statusIdx: number;
-  ts: number;
   revoked: boolean;
-}
-
-export interface LedgerRecord {
-  seq: number;
-  vcId: string;
-  statusIdx: number;
-  ts: number;
-  prevHash: string;
-  hash: string;
 }
 
 export interface PasskeyCredential {
@@ -39,18 +29,10 @@ export interface LogEntry {
   received: Record<string, unknown>;
 }
 
-export const GENESIS_HASH = "0".repeat(64);
-
-async function sha256Hex(s: string): Promise<string> {
-  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 interface PersistShape {
   issuer: { publicKeyJwk: JsonWebKey; privateKeyJwk: JsonWebKey };
   users: User[];
   issued: IssuedRecord[];
-  ledger: LedgerRecord[];
   statusBitsB64: string;
   nextStatusIdx: number;
   nextVcSeq: number;
@@ -61,7 +43,6 @@ class Store {
   readonly issuerName = "demo-trust-root";
   users = new Map<string, User>();
   issued = new Map<string, IssuedRecord>();
-  ledger: LedgerRecord[] = [];
   statusBits = new Uint8Array(64);
   nextStatusIdx = 0;
   nextVcSeq = 1;
@@ -113,7 +94,6 @@ class Store {
     this.privJwk = raw.issuer.privateKeyJwk;
     for (const u of raw.users) this.users.set(u.userName, u);
     for (const r of raw.issued) this.issued.set(r.vcId, r);
-    this.ledger = raw.ledger;
     this.statusBits = b64uDecode(raw.statusBitsB64);
     this.nextStatusIdx = raw.nextStatusIdx;
     this.nextVcSeq = raw.nextVcSeq;
@@ -124,7 +104,6 @@ class Store {
       issuer: { publicKeyJwk: this.issuer.publicKeyJwk, privateKeyJwk: this.privJwk },
       users: [...this.users.values()],
       issued: [...this.issued.values()],
-      ledger: this.ledger,
       statusBitsB64: b64uEncode(this.statusBits),
       nextStatusIdx: this.nextStatusIdx,
       nextVcSeq: this.nextVcSeq,
@@ -171,7 +150,7 @@ class Store {
     return s.userName;
   }
 
-  // --- credentials / ledger / status ----------------------------------------
+  // --- credentials / status -------------------------------------------------
   nextVcId(): string {
     let vcId: string;
     do {
@@ -182,18 +161,13 @@ class Store {
     return vcId;
   }
 
-  async recordIssuance(vcId: string, statusIdx: number): Promise<void> {
+  recordIssuance(vcId: string, statusIdx: number): void {
     if (statusIdx >= this.statusBits.length * 8) {
       const grown = new Uint8Array(this.statusBits.length * 2);
       grown.set(this.statusBits);
       this.statusBits = grown;
     }
-    this.issued.set(vcId, { vcId, statusIdx, ts: Date.now(), revoked: false });
-    const seq = this.ledger.length + 1;
-    const prevHash = this.ledger.at(-1)?.hash ?? GENESIS_HASH;
-    const ts = Date.now();
-    const hash = await sha256Hex(`${prevHash}|${seq}|${vcId}|${statusIdx}|${ts}`);
-    this.ledger.push({ seq, vcId, statusIdx, ts, prevHash, hash });
+    this.issued.set(vcId, { vcId, statusIdx, revoked: false });
     this.persist();
   }
 

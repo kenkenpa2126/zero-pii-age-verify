@@ -212,18 +212,16 @@ try {
   bad("log contrast", e);
 }
 
-// 12. public issuance log is minimized
+// 12. status list remains available without a public issuance ledger
 try {
-  const ledger = (await (await fetch(`${B}/api/ledger`)).json()) as Record<string, unknown>;
-  if (!Number.isInteger(ledger.issuedCount)) throw new Error("issuedCount missing");
-  if ("chain" in ledger) throw new Error("public ledger should not expose the issuance chain");
-  const serialized = JSON.stringify(ledger);
-  if (serialized.includes(cred!.vcId) || serialized.includes(license.birthdate)) {
-    throw new Error(`ledger exposes correlating data: ${serialized}`);
-  }
-  ok("public issuance log exposes only an aggregate summary");
+  const ledgerRes = await fetch(`${B}/api/ledger`);
+  if (ledgerRes.status !== 404) throw new Error(`ledger endpoint should be removed, got ${ledgerRes.status}`);
+  const statusRes = await fetch(`${B}/api/status-list`);
+  const statusJson = (await statusRes.json()) as { bits?: string };
+  if (!statusRes.ok || typeof statusJson.bits !== "string") throw new Error("status list missing");
+  ok("revocation uses status list without exposing a public issuance ledger");
 } catch (e) {
-  bad("public ledger minimization", e);
+  bad("ledger removal", e);
 }
 
 server.close();

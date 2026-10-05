@@ -118,23 +118,45 @@ The issuer records each issued credential with:
 
 - `vcId`
 - `statusIdx`
-- timestamp
 - revoked flag
 
 `/api/admin/revoke` marks a credential revoked and sets a status bit. The endpoint requires a bearer admin token. In dev mode the demo token is `dev-admin-token`; outside dev, set `ZEROPII_ADMIN_TOKEN`.
 
 The verifier rejects a credential if `store.isRevoked(result.vcId)` is true.
 
-## Public Metadata
+## Removed Transparency Ledger
 
-The original demo exposed a public issuance chain containing stable credential identifiers and timestamps. That made correlation easier without materially helping this narrow age-verification PoC.
+An earlier demo version had an internal transparency-style issuance chain and a public `/api/ledger` endpoint. v1 removes both.
 
-The public `/api/ledger` endpoint now exposes only:
+Reason:
 
-- issuer name
-- aggregate issued count
+- the chain was not required for issuing or verifying the age predicate
+- revocation only needs `vcId`, `statusIdx`, and `revoked`
+- publishing or preserving issuance-chain metadata makes the protocol harder to explain
+- stable credential identifiers and issuance timestamps can become correlation material
 
-The internal store still needs credential IDs and status indices for revocation, but the public demo view does not publish the full issuance chain.
+The remaining status mechanism is intentionally small: a local issued-record map plus a bitset exposed by `/api/status-list`.
+
+## What the Verifier Sees
+
+During successful verification, the verifier sees:
+
+| Field | Classification | Notes |
+| --- | --- | --- |
+| `over20` | age attribute | The only business claim intentionally disclosed. |
+| `iss` | required security metadata | Identifies which issuer key should be trusted. |
+| `iat`, `exp` | required security metadata / potentially linkable metadata | Needed for freshness and expiration checks; also timestamps. |
+| `jti` / `vcId` | stable identifier / potentially linkable metadata | Needed here for revocation lookup; reusable across presentations. |
+| `status.idx` | required security metadata / potentially linkable metadata | Used for revocation status. |
+| `cnf.jwk` | required security metadata / stable identifier | Enforces holder key binding; linkable if reused. |
+| `_sd`, `_sd_alg` | required security metadata | Binds disclosures to the issuer-signed credential. |
+| disclosure salt | required security metadata | Needed to recompute the disclosed claim hash. |
+| KB-JWT `nonce` | required security metadata | Prevents simple replay. |
+| KB-JWT `aud` | required security metadata | Binds the presentation to this verifier. |
+| KB-JWT `iat` | required security metadata / potentially linkable metadata | Limits KB-JWT lifetime; also a timestamp. |
+| KB-JWT `sd_hash` | required security metadata | Binds the KB-JWT to the exact SD-JWT and disclosures. |
+
+v1 minimizes disclosed PII, but does not provide cross-verifier unlinkability. Data minimization is not the same as anonymity.
 
 ## Stable Values Across Presentations
 
@@ -175,7 +197,7 @@ Data minimization is not the same as anonymity or unlinkability.
 ## Known PoC Simplifications
 
 - Issuer state is stored in a local JSON file.
-- Status list and internal issuance log are local demo structures.
+- Status list and issued-record map are local demo structures.
 - Wallet state is browser IndexedDB.
 - The implementation is an educational SD-JWT-style subset, not a full standards-compliant SD-JWT stack.
 - Verifier logs intentionally store received claims so the demo can show the difference between predicate disclosure and the legacy flow.

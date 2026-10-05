@@ -16,12 +16,14 @@ Two issuer assumptions are intentionally separate.
 Correctness trust:
 
 - The issuer is trusted to evaluate and attest the age attribute correctly.
+- The issuer is trusted to sign credentials correctly with its legitimate signing key.
 
 Confidentiality trust:
 
 - The issuer should not be assumed to be immune to data breaches.
+- The issuer should not be treated as a perfect privacy custodian.
 
-The design minimizes dependence on issuer confidentiality by avoiding unnecessary retention. The issuer sees the mock birthdate during issuance, but the issued credential, wallet storage, verifier logs, and public issuance summary do not contain the exact birthdate.
+The design minimizes dependence on issuer confidentiality by avoiding unnecessary retention. The issuer sees the mock birthdate during issuance, but the issued credential, wallet storage, and verifier logs do not contain the exact birthdate. The verifier is not trusted with PII. The wallet is designed to contain as little valuable PII as possible.
 
 ## Scenario: Verifier Database Breach
 
@@ -63,12 +65,12 @@ Remaining assumptions:
 Protected:
 
 - The issued credential and wallet copy do not contain raw PII.
-- The public issuance summary does not expose credential IDs or issuance timestamps.
+- There is no public issuance ledger exposing credential IDs or issuance timestamps.
 
 May leak:
 
 - Any raw birthdate data the issuer logs or retains outside this PoC.
-- Internal issuance records such as credential IDs and status indices if the local state file is breached.
+- Internal issued records such as credential IDs and status indices if the local state file is breached.
 
 Remaining assumptions:
 
@@ -82,6 +84,7 @@ Protected:
 
 May leak or fail:
 
+- Issuer impersonation and weak identity-proofing attacks are not solved.
 - An attacker with the issuer private key can mint fraudulent credentials.
 - Verifiers cannot distinguish legitimate issuer signatures from signatures made with a compromised key.
 
@@ -101,6 +104,7 @@ May leak or fail:
 
 - If the holder private key is also stolen, an attacker can present the credential.
 - A stolen wallet may still expose stable identifiers such as `vcId` and holder public key.
+- Credential lending, device lending, and shared-device misuse are not fully solved.
 - This PoC does not prove that the person holding the device is the original subject at presentation time.
 
 Remaining assumptions:
@@ -155,3 +159,13 @@ Remaining assumptions:
 ## Important Boundary
 
 Data minimization is not the same as anonymity or unlinkability. This version intentionally focuses on reducing raw PII in the credential, wallet, verifier, and public metadata. It does not try to solve cross-site correlation.
+
+Known v1 limitations:
+
+- issuer impersonation / weak identity-proofing attacks are not solved
+- issuer compromise is not fully solved
+- issuer signing-key compromise is not fully solved
+- cross-verifier unlinkability is not provided
+- credential lending / device lending is not fully solved
+- wallet/device compromise remains relevant
+- this is not a production identity system

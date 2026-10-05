@@ -73,7 +73,7 @@ async function issueFor(holderPubJwk: JsonWebKey, license: IssueBody["license"])
     statusIdx,
     claims: { over20 },
   });
-  await store.recordIssuance(vcId, statusIdx);
+  store.recordIssuance(vcId, statusIdx);
   console.log(`[issue] ${vcId} -> statusIdx=${statusIdx} over20=${issued.disclosures[0]?.value}`);
   return { ok: true, vcId, token: issued.token, disclosures: issued.disclosures };
 }
@@ -260,16 +260,8 @@ app.get("/api/shop/log", (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// transparency / status / admin
+// status / admin
 // ---------------------------------------------------------------------------
-
-app.get("/api/ledger", (c) => {
-  return c.json({
-    issuer: store.issuerName,
-    note: "公開ビューは相関リスクを下げるため、credential IDや発行時刻を公開しません。",
-    issuedCount: store.ledger.length,
-  });
-});
 
 app.get("/api/status-list", (c) => {
   return c.json({ bits: b64uEncode(store.statusBits) });

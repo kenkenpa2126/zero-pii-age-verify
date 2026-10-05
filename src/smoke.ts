@@ -194,6 +194,30 @@ function replaceJwtHeader(jwt: string, header: Record<string, unknown>): string 
   return `${b64uEncode(JSON.stringify(header))}.${payload}.${sig}`;
 }
 
+function replaceJwtPayload(jwt: string, payload: Record<string, unknown>): string {
+  const [header, , sig] = jwt.split(".");
+  return `${header}.${b64uEncode(JSON.stringify(payload))}.${sig}`;
+}
+
+await checkReject("tampered credential payload is rejected", "issuer signature verification failed", async () => {
+  const parts = (await presentCredential({
+    credential: cred!,
+    reveal: ["over20"],
+    holder,
+    nonce: "nonce-abc",
+    aud: "mini-sake-shop",
+  })).split("~");
+  const [, payload] = parts[0]!.split(".");
+  const parsed = JSON.parse(new TextDecoder().decode(b64uDecode(payload!))) as Record<string, unknown>;
+  parts[0] = replaceJwtPayload(parts[0]!, { ...parsed, jti: "vc-tampered" });
+  await verifyPresentation({
+    presentation: parts.join("~"),
+    issuerPubJwk: issuer.publicKeyJwk,
+    expectedNonce: "nonce-abc",
+    expectedAud: "mini-sake-shop",
+  });
+});
+
 await checkReject("unsupported credential alg is rejected", "unsupported JWT alg", async () => {
   const parts = (await presentCredential({
     credential: cred!,
