@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ミニ酒屋 — zero-pii demo</title>
+  <script type="module" crossorigin src="/assets/shop-BdxzaV96.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/idb-CnhMAw-t.js">
+  <link rel="stylesheet" crossorigin href="/assets/idb-CKXwzmWD.css">
+</head>
+<body>
+  <main class="wrap">
+    <h1>🍶 ミニ酒屋</h1>
+    <p class="sub">年齢確認が必要なデモショップ。このサーバーが「検証者」の役。</p>
+
+    <section class="card product">
+      <div>
+        <h2>獺祭 純米大吟醸 720ml</h2>
+        <p class="muted">¥3,300 — 20歳未満は購入できません</p>
+      </div>
+      <button id="btn-buy">20歳以上です → 年齢確認して購入</button>
+    </section>
+
+    <div id="result" class="result muted">まだ年齢確認は行われていません</div>
+
+    <section class="card">
+      <h2>比較用：従来方式（フォーム入力）</h2>
+      <p class="muted">あえて個人情報をそのまま送る従来方式も試せます。サーバーログの差を見てください。</p>
+      <button id="btn-legacy" class="danger">従来方式で送信（比較）</button>
+    </section>
+
+    <section class="card">
+      <h2>サーバーが実際に受信したもの</h2>
+      <table>
+        <thead>
+          <tr><th>時刻</th><th>方式</th><th>受信した主張</th><th>個人情報</th></tr>
+        </thead>
+        <tbody id="log"></tbody>
+      </table>
+      <p class="muted">検証者は「over20: true」の署名しか受け取らず、名前・住所・生年月日は一切送信されません。</p>
+    </section>
+
+    <nav><a href="/wallet.html">← ウォレットへ</a></nav>
+  </main>
+</body>
+</html>

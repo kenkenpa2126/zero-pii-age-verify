@@ -1,0 +1,28 @@
+{
+  "name": "zero-pii-age-verify",
+  "version": "0.1.0",
+  "description": "Zero-PII attribute verification: prove 'over 20' without revealing any personal data",
+  "type": "module",
+  "scripts": {
+    "dev": "ZEROPII_DEV=1 tsx watch src/server/main.ts",
+    "start": "tsx src/server/main.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "smoke": "tsx src/smoke.ts",
+    "e2e": "tsx src/e2e.ts"
+  },
+  "keywords": ["sd-jwt", "webauthn", "passkey", "zero-knowledge", "age-verification"],
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.1.3",
+    "@simplewebauthn/server": "^14.0.3",
+    "@simplewebauthn/browser": "^14.0.0",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.3"
+  }
+}

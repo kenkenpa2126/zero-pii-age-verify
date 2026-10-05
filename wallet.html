@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ウォレット — zero-pii demo</title>
+</head>
+<body>
+  <main class="wrap">
+    <h1>🗝️ ウォレット</h1>
+    <p class="sub">自分の属性証明を保管する場所。パスキーで解錠する。</p>
+
+    <section class="card">
+      <h2>1. パスキーで解錠</h2>
+      <label>ユーザー名 <input id="username" value="yamada" /></label>
+      <div class="row">
+        <button id="btn-register">パスキー登録</button>
+        <button id="btn-login" class="ghost">ログイン</button>
+      </div>
+      <p id="auth-status" class="muted">未ログイン</p>
+    </section>
+
+    <section class="card">
+      <h2>2. eKYC → 証明書発行 <span class="tag">デモではモック</span></h2>
+      <p class="muted">
+        本来ここで運転免許・マイナンバーの実検証が入ります。デモでは入力値を「確認済み」として扱います。
+        発行元の台帳に残るのは<b>証明書番号と失効状態のみ</b>で、氏名・住所は保存されません。
+      </p>
+      <label>氏名 <input id="lic-name" value="山田 太郎" /></label>
+      <label>生年月日 <input id="lic-birth" value="1995-04-01" /></label>
+      <label>住所 <input id="lic-addr" value="東京都千代田区1-2-3" /></label>
+      <button id="btn-issue">証明書を発行</button>
+    </section>
+
+    <section class="card">
+      <h2>3. 保有する証明書</h2>
+      <div id="cred-list"></div>
+    </section>
+
+    <nav>
+      <a href="/shop.html">→ ミニ酒屋で試す</a> ・
+      <a href="/api/ledger" target="_blank">透明性ログを見る</a> ・
+      <a href="/api/status-list" target="_blank">失効リストを見る</a>
+    </nav>
+  </main>
+  <script type="module" src="/src/client/wallet.ts"></script>
+</body>
+</html>
